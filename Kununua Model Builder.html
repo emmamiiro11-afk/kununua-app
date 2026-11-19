@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kununua Model Builder</title>
+<style>
+:root{--bg:#f4f6f8;--surf:#fff;--ink:#17202e;--mute:#5d6877;--line:#d8dde4;--acc:#0f6b54;--acc-ink:#fff;--bad:#b4402a;--ok:#0f6b54;--hl:#e8f1ee;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10151c;--surf:#18202a;--ink:#e6eaf0;--mute:#98a3b3;--line:#2b3644;--acc:#4cc2a0;--acc-ink:#0b1a15;--bad:#f0907a;--ok:#4cc2a0;--hl:#1b2b27;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#10151c;--surf:#18202a;--ink:#e6eaf0;--mute:#98a3b3;--line:#2b3644;--acc:#4cc2a0;--acc-ink:#0b1a15;--bad:#f0907a;--ok:#4cc2a0;--hl:#1b2b27;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+h1{font:600 24px/1.2 Georgia,"Times New Roman",serif;margin:0}
+.sub{color:var(--mute);margin:2px 0 14px}
+.top{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
+select,input{font:inherit;color:var(--ink);background:var(--surf);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+input[type=number]{width:100%;text-align:right}
+:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0;border:1px solid var(--line);border-radius:8px;background:var(--surf);margin:14px 0;overflow:hidden}
+.strip div{padding:12px 14px;border-right:1px solid var(--line)}
+.strip div:last-child{border-right:0}
+.strip b{display:block;font:600 22px Georgia,serif}
+.strip span{color:var(--mute);font-size:13px}
+.good b{color:var(--ok)}.bad b{color:var(--bad)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.tabs button{font:inherit;background:none;border:0;border-bottom:3px solid transparent;padding:8px 14px;color:var(--mute);cursor:pointer}
+.tabs button[aria-selected=true]{color:var(--ink);border-color:var(--acc);font-weight:600}
+.pane{display:none}.pane.on{display:block}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:8px;padding:14px}
+h2{font:600 16px/1.3 Georgia,serif;margin:0 0 10px}
+.f{display:grid;grid-template-columns:1fr 110px;gap:8px;align-items:center;margin-bottom:6px}
+.f label{color:var(--mute);font-size:14px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:560px}
+th,td{padding:5px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left;white-space:normal}
+th{font-weight:600;color:var(--mute);font-size:13px}
+tr.t td{font-weight:600;background:var(--hl)}
+tr.h td{font-weight:600;color:var(--mute);border-bottom:0;padding-top:12px}
+td input{width:76px;padding:4px 6px}
+.neg{color:var(--bad)}
+.note{color:var(--mute);font-size:13px;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="top">
+<div><h1>Kununua Model Builder</h1><p class="sub">Annual three-statement model with loan schedule. All amounts in UGX millions.</p></div>
+<label>Scenario <select id="scen"><option value="cons">Conservative</option><option value="base" selected>Base case</option><option value="opt">Optimistic</option></select></label>
+</div>
+<div class="strip" id="strip"></div>
+<div class="tabs" role="tablist">
+<button role="tab" data-p="inp" aria-selected="true">Inputs</button>
+<button role="tab" data-p="stm" aria-selected="false">Statements</button>
+<button role="tab" data-p="rat" aria-selected="false">Loan metrics</button>
+</div>
+<section id="inp" class="pane on">
+<div class="grid">
+<div class="card"><h2>Base year (last actuals)</h2><div id="bf"></div><p class="note">Equity is derived so the base balance sheet balances. Sample data is Dumark’s 2021 actuals.</p></div>
+<div class="card"><h2>General and existing debt</h2><div id="gf"></div></div>
+<div class="card"><h2>New loan</h2><div id="lf"></div><p class="note">Equal monthly installments, drawn at the start of the chosen year.</p></div>
+</div>
+<div class="card scroll" style="margin-top:16px"><h2>Yearly drivers</h2><table id="dt"></table></div>
+</section>
+<section id="stm" class="pane"><div class="card scroll" id="st"></div></section>
+<section id="rat" class="pane"><div class="card scroll" id="rt"></div></section>
+</div>
+<script>
+const Y=5;
+const DEF={
+base:{rev:717.3,cogs:416.0,opex:118.5,cash:9.6,ar:86.1,inv:377.7,ppe:1286.7,ap:104.9,oth:97.5,loan:91.2},
+drv:{g:[15,20,25,20,15],cogs:[63,63,51,51,51],opex:[12.9,12.9,12.9,12.9,12.9],ard:[40,40,40,40,40],invd:[250,200,150,150,150],apd:[70,70,70,70,70],capex:[0,30,30,30,30]},
+gen:{year:2021,tax:30,dep:2,payout:0,exRate:20,exRepay:20,nl:250,nlRate:25,nlTen:24,nlYear:2},
+scen:"base"};
+let S=JSON.parse(JSON.stringify(DEF));
+try{const s=localStorage.getItem("kmb1");if(s)S=Object.assign(S,JSON.parse(s))}catch(e){}
+const BF=[["rev","Revenue"],["cogs","Cost of goods sold"],["opex","Operating expenses"],["cash","Cash"],["ar","Receivables"],["inv","Inventory"],["ppe","Property, plant and equipment"],["ap","Payables"],["oth","Other current liabilities"],["loan","Existing loan"]];
+const GF=[["year","Base year"],["tax","Tax rate %"],["dep","Depreciation % of PPE"],["payout","Dividend payout %"],["exRate","Existing loan rate %"],["exRepay","Existing loan repaid per year"]];
+const LF=[["nl","Loan amount"],["nlRate","Annual interest rate %"],["nlTen","Tenor (months)"],["nlYear","Drawn in projection year (1-5)"]];
+const DR=[["g","Revenue growth %"],["cogs","COGS % of revenue"],["opex","Opex % of revenue"],["ard","Receivable days"],["invd","Inventory days"],["apd","Payable days"],["capex","Capital expenditure"]];
+const $=id=>document.getElementById(id);
+const get=p=>p.split(".").reduce((o,k)=>o[k],S);
+function set(p,v){const a=p.split(".");let o=S;for(let i=0;i<a.length-1;i++)o=o[a[i]];o[a[a.length-1]]=v}
+const fld=(p,l)=>`<div class="f"><label>${l}</label><input type="number" step="any" data-k="${p}" value="${get(p)}"></div>`;
+function buildInputs(){
+$("bf").innerHTML=BF.map(([k,l])=>fld("base."+k,l)).join("");
+$("gf").innerHTML=GF.map(([k,l])=>fld("gen."+k,l)).join("");
+$("lf").innerHTML=LF.map(([k,l])=>fld("gen."+k,l)).join("");
+$("dt").innerHTML="<tr><th>Driver</th>"+[...Array(Y)].map((_,i)=>`<th>FY${S.gen.year+i+1}</th>`).join("")+"</tr>"+
+DR.map(([k,l])=>`<tr><td>${l}</td>`+[...Array(Y)].map((_,i)=>`<td><input type="number" step="any" data-k="drv.${k}.${i}" value="${S.drv[k][i]}"></td>`).join("")+"</tr>").join("");
+}
+function calc(){
+const b=S.base,d=S.drv,g=S.gen;
+const sc={cons:{g:-5,c:2},base:{g:0,c:0},opt:{g:5,c:-2}}[S.scen];
+const nl=+g.nl,n=Math.round(g.nlTen),r=g.nlRate/1200,st=(g.nlYear-1)*12;
+const pmt=nl>0&&n>0?(r?nl*r/(1-Math.pow(1+r,-n)):nl/n):0;
+const nI=Array(Y).fill(0),nP=Array(Y).fill(0),nB=Array(Y).fill(0),nD=Array(Y).fill(0);
+if(pmt>0&&g.nlYear>=1&&g.nlYear<=Y){nD[g.nlYear-1]=nl;let bal=nl;
+for(let m=0;m<n;m++){const y=Math.floor((st+m)/12);if(y>=Y)break;const i=bal*r,p=pmt-i;nI[y]+=i;nP[y]+=p;bal-=p;nB[y]=bal}}
+const eq0=b.cash+b.ar+b.inv+b.ppe-b.ap-b.oth-b.loan;
+let p={rev:b.rev,ppe:b.ppe,ar:b.ar,inv:b.inv,ap:b.ap,cash:b.cash,ex:b.loan,eq:eq0};
+const R=[];
+for(let t=0;t<Y;t++){
+const rev=p.rev*(1+(d.g[t]+sc.g)/100),cogs=rev*(d.cogs[t]+sc.c)/100,gp=rev-cogs,opex=rev*d.opex[t]/100,ebitda=gp-opex;
+const capex=+d.capex[t],dep=(p.ppe+capex)*g.dep/100,ebit=ebitda-dep;
+const exRep=Math.min(p.ex,+g.exRepay),exInt=p.ex*g.exRate/100,interest=exInt+nI[t];
+const ebt=ebit-interest,tax=Math.max(0,ebt)*g.tax/100,ni=ebt-tax,div=Math.max(0,ni)*g.payout/100;
+const ar=rev*d.ard[t]/365,inv=cogs*d.invd[t]/365,ap=cogs*d.apd[t]/365,ppe=p.ppe+capex-dep;
+const cfo=ni+dep-(ar-p.ar)-(inv-p.inv)+(ap-p.ap),cfi=-capex,cff=nD[t]-nP[t]-exRep-div,net=cfo+cfi+cff;
+const cash=p.cash+net,ex=p.ex-exRep,loan=ex+nB[t],eq=p.eq+ni-div;
+const ta=cash+ar+inv+ppe,tl=ap+b.oth+loan,ds=interest+nP[t]+exRep;
+R.push({rev,cogs,gp,opex,ebitda,dep,ebit,interest,ebt,tax,ni,cash,ar,inv,ppe,ta,ap,oth:b.oth,loan,tl,eq,tle:tl+eq,chk:ta-tl-eq,
+ni_:ni,cfo,cfi,cff,net,div,capex,ds,dscr:ds>0?(ebitda-tax)/ds:null,icr:interest>0?ebit/interest:null,
+cr:(cash+ar+inv)/(ap+b.oth),gear:loan/eq,gm:gp/rev,em:ebitda/rev,nm:ni/rev,prin:nP[t]+exRep,draw:nD[t]});
+p={rev,ppe,ar,inv,ap,cash,ex,eq}}
+return{R,eq0}}
+const fm=v=>v==null?"–":(Math.abs(v)<0.05?"0.0":(v<0?"("+Math.abs(v).toLocaleString("en-US",{minimumFractionDigits:1,maximumFractionDigits:1})+")":v.toLocaleString("en-US",{minimumFractionDigits:1,maximumFractionDigits:1})));
+const px=v=>v==null?"–":(v*100).toFixed(1)+"%";
+const xx=v=>v==null?"–":v.toFixed(2)+"x";
+const cell=(v,f)=>`<td class="${v<0?"neg":""}">${f(v)}</td>`;
+const hd=()=>"<tr><th></th>"+[...Array(Y)].map((_,i)=>`<th>FY${S.gen.year+i+1}</th>`).join("")+"</tr>";
+function rows(R,spec,f0){return spec.map(s=>s[0]=="h"?`<tr class="h"><td colspan="${Y+1}">${s[1]}</td></tr>`:
+`<tr class="${s[2]?"t":""}"><td>${s[1]}</td>${R.map(r=>cell(r[s[0]],s[3]||f0)).join("")}</tr>`).join("")}
+function render(){
+const{R,eq0}=calc(),b=S.base;
+const dsc=R.map(r=>r.dscr).filter(v=>v!=null),minD=dsc.length?Math.min(...dsc):null;
+const minC=Math.min(...R.map(r=>r.cash)),mx=Math.max(...R.map(r=>Math.abs(r.chk)));
+$("strip").innerHTML=
+`<div class="${mx<0.01?"good":"bad"}"><b>${mx<0.01?"Balanced":"Out by "+fm(mx)}</b><span>Balance sheet check, all years</span></div>`+
+`<div class="${minD==null?"":minD>=1.3?"good":"bad"}"><b>${xx(minD)}</b><span>Lowest DSCR (banks usually want 1.3x or more)</span></div>`+
+`<div class="${minC>=0?"good":"bad"}"><b>${fm(minC)}</b><span>Lowest year-end cash (UGX m)</span></div>`;
+const IS=[["h","Income statement"],["rev","Revenue"],["cogs","Cost of goods sold"],["gp","Gross profit",1],["opex","Operating expenses"],["ebitda","EBITDA",1],["dep","Depreciation"],["ebit","EBIT",1],["interest","Interest"],["ebt","Profit before tax"],["tax","Tax"],["ni","Net profit",1]];
+const BS=[["h","Balance sheet"],["cash","Cash"],["ar","Receivables"],["inv","Inventory"],["ppe","Property, plant and equipment"],["ta","Total assets",1],["ap","Payables"],["oth","Other current liabilities"],["loan","Loans"],["tl","Total liabilities",1],["eq","Equity"],["tle","Total liabilities and equity",1],["chk","Check (should be zero)"]];
+const CF=[["h","Cash flow"],["cfo","Operating cash flow"],["cfi","Investing cash flow (capex)"],["draw","Loan drawn"],["prin","Loan principal repaid"],["div","Dividends"],["net","Net change in cash",1]];
+$("st").innerHTML=`<table>${hd()}${rows(R,IS,fm)}${rows(R,BS,fm)}${rows(R,CF,fm)}</table><p class="note">Base year equity: ${fm(eq0)}. Base year cash: ${fm(b.cash)}.</p>`;
+const RT=[["h","Lender view"],["dscr","DSCR (EBITDA less tax, over interest and principal)",0,xx],["icr","Interest cover (EBIT over interest)",0,xx],["gear","Loans to equity",0,xx],["cr","Current ratio (excl. loans)",0,xx],["h","Profitability"],["gm","Gross margin",0,px],["em","EBITDA margin",0,px],["nm","Net margin",0,px]];
+$("rt").innerHTML=`<table>${hd()}${rows(R,RT,fm)}</table><p class="note">Change the scenario at the top to see how coverage holds up under weaker growth and higher costs.</p>`;
+try{localStorage.setItem("kmb1",JSON.stringify(S))}catch(e){}}
+document.addEventListener("input",e=>{const k=e.target.dataset.k;if(!k)return;const v=parseFloat(e.target.value);set(k,isNaN(v)?0:v);if(k=="gen.year")document.querySelectorAll("#dt th:not(:first-child)").forEach((th,i)=>th.textContent="FY"+(S.gen.year+i+1));render()});
+$("scen").value=S.scen;$("scen").onchange=e=>{S.scen=e.target.value;render()};
+document.querySelectorAll(".tabs button").forEach(bt=>bt.onclick=()=>{document.querySelectorAll(".tabs button").forEach(x=>x.setAttribute("aria-selected",x==bt));document.querySelectorAll(".pane").forEach(x=>x.classList.toggle("on",x.id==bt.dataset.p))});
+buildInputs();render();
+</script>
+</body>
+</html>
